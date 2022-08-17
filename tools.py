@@ -309,12 +309,14 @@ def numba_cic_1D(positions, density, boxsize, weights=np.empty(0)):
         # find the wrapped x,y,z grid locations of the points we need to change
         # negative indices will be automatically wrapped
         ixm1 = (ix - 1)
-        ixw  = (ix)
-        ixp1 = (ix + 1)
-        if ixm1 >= zero or ixm1 < gx: density[ixm1] += wxm1 *W
-        if ixw  >= zero or ixw  < gx: density[ixw ] += wx *W
-        if ixp1 >= zero or ixp1 < gx: density[ixp1] += wxp1 *W
-        
+        ixw  = rightwrap(ix)
+        ixp1 = rightwrap(ix + 1)
+        #if ixm1 >= zero or ixm1 < gx: density[ixm1] += wxm1 *W
+        #if ixw  >= zero or ixw  < gx: density[ixw ] += wx *W
+        #if ixp1 >= zero or ixp1 < gx: density[ixp1] += wxp1 *W
+        density[ixm1] += wxm1 *W
+        density[ixw ] += wx *W
+        density[ixp1] += wxp1 *W
 
 @numba.jit(nopython=True, nogil=True) 
 def rsd_tau(tau, vfield, binc, E_z, redshift, Lbox):

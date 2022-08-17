@@ -64,6 +64,7 @@ k_hMpc, p1d_hMpc = compute_pk1d(deltaF, Lbox)
 # plot power spectrum
 plt.figure(2, figsize=(9, 7))
 plt.plot(k_hMpc, p1d_hMpc*k_hMpc/np.pi, label='FGPA')
+np.savez(f"power1d_fgpa_ngrid{ngrid:d}.npz", p1d_hMpc=p1d_hMpc, k_hMpc=k_hMpc)
 
 n_k_bins = 20
 n_mu_bins = 16
@@ -78,7 +79,7 @@ int_mu = []
 for i in range(len(mu_want)):
     int_mu.append(np.argmin(np.abs(mu_want[i] - mu[no_nans])))
 print(k_hMpc[:, int_mu[3]])
-
+np.savez(f"power3d_fgpa_ngrid{ngrid:d}.npz", p3d_hMpc=p3d_hMpc, k_hMpc=k_hMpc)
 
 cosmo = cosmology.Planck15
 P_L = cosmology.LinearPower(cosmo, redshift, transfer='EisensteinHu')
@@ -137,6 +138,7 @@ plt.xlim([0.03, 20.])
 plt.ylim([1.e-3, .1])
 plt.savefig(f"power_fgpa_rsd_high_ngrid{ngrid}.png")
 plt.close()
+np.savez(f"power1d_tng_res{res}.npz", p1d_hMpc=p1d_hMpc, k_hMpc=k_hMpc)
 
 k_hMpc, mu, p3d_hMpc, counts = compute_pk3d(deltaF, Lbox, n_k_bins, n_mu_bins)
 print((p3d_hMpc)[:, int_mu[0]])
@@ -148,6 +150,7 @@ for i in range(n_k_bins):
 int_mu = []
 for i in range(len(mu_want)):
     int_mu.append(np.argmin(np.abs(mu_want[i] - mu[no_nans])))
+np.savez(f"power3d_tng_res{res}.npz", p3d_hMpc=p3d_hMpc, k_hMpc=k_hMpc)
 
 plt.figure(3)
 plt.plot(k_hMpc[:, int_mu[0]], (p3d_hMpc)[:, int_mu[0]]/P_L.__call__(k_hMpc[:, int_mu[0]]), color='violet', ls='--')
@@ -158,7 +161,7 @@ plt.plot([], [], ls='--', label='TNG')
 plt.plot([], [], ls='-', label='FGPA')
 plt.legend()
 #plt.ylim([0., 1.])
-plt.ylim([0., 0.4])
+plt.ylim([0., 0.3])
 plt.xlim([0.03, 20.])
 plt.xscale('log')
 #plt.yscale('log')

@@ -82,7 +82,7 @@ for i in range(ngrid):
     for j in range(ngrid):
         # create empty mesh, generate white noise (variance unity), multiply by P(k)**0.5 
         pm = ParticleMesh(Nmesh=[ngrid, 1], BoxSize=Lbox)
-        delta1d_extra, _ = gaussian_real_fields(pm, Pk_extra, seed=42+j)
+        delta1d_extra, _ = gaussian_real_fields(pm, Pk_extra, seed=42+j*ngrid+i)
         delta1d_extra = np.asarray(delta1d_extra)
         #print(delta1d_extra.dtype, delta1d_extra.shape)
         delta_extra[i, j, :] = delta1d_extra[:, 0]

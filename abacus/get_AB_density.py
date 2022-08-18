@@ -5,7 +5,6 @@ sys.path.append("..")
 
 import numpy as np
 import asdf
-#from astropy.io import ascii
 
 #from abacusnbody.data.compaso_halo_catalog import CompaSOHaloCatalog
 from bitpacked import unpack_rvint
@@ -38,29 +37,8 @@ else:
 map_types = ['density', 'velocity'] # 'both'
 
 # 35 chunk edges, 8001 cell edges 
-#chunk_edges = np.linspace(0., Lbox, n_chunks+1) # equivalent
 chunk_edges = np.arange(n_chunks+1) * chunk_size
 cell_edges = np.arange(Ndim_yz+1)*cell_size
-
-# I think the chunks aren't exact (left comes early and right expands beyond)
-"""
-# offsets to subtract (based on the cell edges) and cell indices for each chunk
-offsets = np.zeros(n_chunks)
-prev_ind = 0
-cell_inds_chunk = {}
-for i_chunk in range(n_chunks):
-    fin_ind = np.argmax(cell_edges/chunk_edges[i_chunk+1] > 1.)
-    if i_chunk == 0:
-        prev_ind = 0
-    else:
-        prev_ind = np.argmax(cell_edges/chunk_edges[i_chunk] > 1.) - 1 # this also works
-    if fin_ind == 0: fin_ind = Ndim_yz
-
-    cell_inds_chunk[i_chunk] = np.arange(prev_ind, fin_ind)
-    offsets[i_chunk] = prev_ind * cell_size
-    #prev_ind = fin_ind - 1 # og
-print(cell_inds_chunk)
-"""
 
 # for each redshift
 for i in range(len(zs)):
@@ -77,24 +55,14 @@ for i in range(len(zs)):
         # for each map type
         for map_type in map_types:
 
-            #if i_chunk != 0: # 0 1 31 32 33 next
-            #    continue
-
-            #Ndim_x = len(cell_inds_chunk[i_chunk])
-            #offset = offsets[i_chunk]
-            #boxsize = np.array([Ndim_x, Ndim_yz, Ndim_yz], dtype=np.float32)*cell_size
-            
-            # initiate density of box
-            #density = np.zeros((Ndim_x, Ndim_yz, Ndim_yz), dtype=np.float32)
-            #velocity = np.zeros((Ndim_x, Ndim_yz, Ndim_yz), dtype=np.float32)
-
             # loop over A and B subsample
             for type_AB in subsample_types:
+
                 # halo and field particles
                 fn_halo = sim_dir+f'/halos/z{z:.3f}/halo_rv_{type_AB}/halo_rv_{type_AB}_{i_chunk:03d}.asdf'
                 fn_field = sim_dir+f'/halos/z{z:.3f}/field_rv_{type_AB}/field_rv_{type_AB}_{i_chunk:03d}.asdf'
 
-                # write out the halo (L0+L1) matter particles
+                # read the halo (L0+L1) matter particles
                 halo_data = (asdf.open(fn_halo)['data'])['rvint']
                 if map_type == 'both' or map_type == 'velocity':
                     pos_halo, vel_halo = unpack_rvint(halo_data, Lbox, float_dtype=np.float32, velout=None)
@@ -105,14 +73,14 @@ for i in range(len(zs)):
                 x_halo = pos_halo[:, 0]
                 print("pos_halo[:, 0].min(), pos_halo[:, 0].max() = ", x_halo.min(), x_halo.max())
 
-                # executes once for each chunk to set up global offset, Ndim_x and the 3D arrays
+                # executes once for each chunk to set up chunk offset, Ndim_x and the 3D arrays
                 if type_AB == subsample_types[0]:
                     if i_chunk == n_chunks - 1:
                         choice = x_halo < Lbox/2.
                         edge_min = x_halo[~choice].min()
                         edge_max = x_halo[choice].max()
                     else:
-                        edge_min = x_halo.min() # not used
+                        edge_min = x_halo.min()
                         edge_max = x_halo.max()
 
                     fin_ind = np.argmax(cell_edges/edge_max > 1.)
@@ -128,16 +96,15 @@ for i in range(len(zs)):
 
                         # get offset
                         offset = cell_edges[prev_ind] # left edge of the leftmost cell constraint 
-                        #onset = cell_edges[fin_ind + 1] # right edge of the rightmost (wrapped) cell constraint
                         onset = Lbox - offset # right edge of the midpoint cell constraint         
-                        pos_halo[~choice, 0] -= offset # let's say 1800 is offset and then 1800 becomes 0; 2000 becomes 200 and next dude should follow
-                        pos_halo[choice, 0] += onset # for 0; 200; for 40, 240
+                        pos_halo[~choice, 0] -= offset
+                        pos_halo[choice, 0] += onset
 
                     else:
                         cell_inds_chunk = np.arange(prev_ind, fin_ind)
 
                         # get offset
-                        offset = cell_edges[prev_ind] # prev_ind * cell_size
+                        offset = cell_edges[prev_ind]
                         pos_halo[:, 0] -= offset
 
                     # get boxsize
@@ -158,11 +125,12 @@ for i in range(len(zs)):
 
                     if i_chunk == n_chunks - 1:
                         choice = x_halo < Lbox/2.
-                        pos_halo[~choice, 0] -= offset # you should subtract the very left edge of the left cell constraint
-                        pos_halo[choice, 0] += onset # you should add the very right edge of the right cell constraint
+                        pos_halo[~choice, 0] -= offset
+                        pos_halo[choice, 0] += onset
                     else:
                         pos_halo[:, 0] -= offset
-
+                res = Ndim_x * cell_size - pos_halo[:, 0].max()
+                assert (res < cell_size) and (res >= 0.)
 
                 # add to density
                 if map_type == 'density':
@@ -191,11 +159,12 @@ for i in range(len(zs)):
 
                 choice = x_field < Lbox/2.
                 if i_chunk == n_chunks - 1:
-                    pos_field[~choice, 0] -= offset # you should subtract the very left edge of the left cell constraint
-                    pos_field[choice, 0] += onset # you should add the very right edge of the right cell constraint
+                    pos_field[~choice, 0] -= offset
+                    pos_field[choice, 0] += onset
                 else:
                     pos_field[:, 0] -= offset
-
+                res = Ndim_x * cell_size - pos_field[:, 0].max()
+                assert (res < cell_size) and (res >= 0.)
 
                 # add to density
                 if map_type == 'density':
@@ -209,8 +178,6 @@ for i in range(len(zs)):
                     del vel_field
                 del field_data, pos_field
                 gc.collect()
-
-
 
             header = {}
             header['Redshift'] = z
@@ -235,4 +202,3 @@ for i in range(len(zs)):
                 del density, velocity
             del table
             gc.collect() 
-

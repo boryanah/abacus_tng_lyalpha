@@ -141,6 +141,64 @@ def compute_pk3d(delta_F, L_hMpc, n_k_bins, n_mu_bins, k_hMpc_max=20.):
 
     return k_hMpc, mu, p3d_hMpc, counts
 
+def compute_pk3d_fourier(dF_fft, kperp_hMpc, klos_hMpc, L_hMpc, n_k_bins, n_mu_bins, k_hMpc_max=20.):
+    """Actually measure P3D from skewers grid (in h/Mpc units)"""
+
+    # automize
+    dF_fft /= 205**3 # not sure because need to think but I think so
+    raw_p3d = (np.abs(dF_fft)**2).flatten()
+
+    # h/Mpc
+    kx = kperp_hMpc[:, np.newaxis, np.newaxis]
+    ky = kperp_hMpc[np.newaxis, :, np.newaxis]
+    kz = klos_hMpc[np.newaxis, np.newaxis, :]
+    k_box = np.sqrt(kx**2 + ky**2 + kz**2)
+
+    # construct mu in two steps, without NaN warnings
+    mu_box = kz/np.ones_like(k_box)
+    k_box = k_box.flatten()
+    mu_box = mu_box.flatten()
+
+    # define k-binning (in 1/Mpc)
+    lnk_max = np.log(k_hMpc_max)
+
+    # set minimum k to make sure we cover fundamental mode
+    lnk_min = np.log(0.9999*np.min(k_box[k_box > 0.]))
+    lnk_bin_max = lnk_max + (lnk_max-lnk_min)/(n_k_bins-1)
+    lnk_bin_edges = np.linspace(lnk_min, lnk_bin_max, n_k_bins+1)
+    k_bin_edges = np.exp(lnk_bin_edges)
+
+    # define mu-binning
+    mu_bin_edges = np.linspace(0., 1., n_mu_bins + 1)
+
+    # get rid of k=0, mu=0 mode
+    k_box = k_box[1:]
+    mu_box = mu_box[1:]
+    raw_p3d = raw_p3d[1:]    
+
+    # compute bin averages
+    binned_p3d = spt.binned_statistic_2d(k_box, mu_box, raw_p3d, statistic = 'mean', bins = [k_bin_edges,mu_bin_edges])[0]
+    print('got binned power')
+    binned_counts = spt.binned_statistic_2d(k_box,mu_box,raw_p3d,
+                                            statistic='count', bins=[k_bin_edges,mu_bin_edges])[0]
+    print('got bin counts')
+
+    # compute binned values for (k,mu)
+    binned_k = spt.binned_statistic_2d(k_box, mu_box, k_box,
+                                       statistic = 'mean', bins = [k_bin_edges,mu_bin_edges])[0]
+    print('got binned k')
+    binned_mu = spt.binned_statistic_2d(k_box, mu_box, mu_box,
+                                        statistic = 'mean', bins = [k_bin_edges,mu_bin_edges])[0]
+    print('got binned mu')
+
+    # quantity above is dimensionless, multiply by box size (in Mpc/h)
+    p3d_hMpc = binned_p3d * L_hMpc**3
+    k_hMpc = binned_k
+    mu = binned_mu
+    counts = binned_counts
+
+    return k_hMpc, mu, p3d_hMpc, counts
+
 
 def compute_fk1d(delta_F, L_hMpc):
     # get dimensions of array

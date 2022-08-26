@@ -156,6 +156,10 @@ def compute_pk3d_fourier(dF_fft, kperp_hMpc, klos_hMpc, L_hMpc, n_k_bins, n_mu_b
 
     # construct mu in two steps, without NaN warnings
     mu_box = kz/np.ones_like(k_box)
+    mu_box[k_box > 0.] /= k_box[k_box > 0.]
+    mu_box[k_box == 0.] = 0.
+
+    # flatten arrays
     k_box = k_box.flatten()
     mu_box = mu_box.flatten()
 

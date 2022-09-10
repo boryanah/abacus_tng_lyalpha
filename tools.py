@@ -1,3 +1,4 @@
+# rightwrap in case of rsd and the middle one being actually too far away from anything close by
 import numpy as np
 import numba
 #from nbodykit.lab import ArrayCatalog, FieldMesh
@@ -5,7 +6,7 @@ import numba
 from scipy.optimize import minimize
 from fake_spectra import fluxstatistics as fs
 import asdf
-from fast_cksum.cksum_io import CksumWriter
+#from fast_cksum.cksum_io import CksumWriter
 
 @numba.vectorize
 def rightwrap(x, L):
@@ -110,14 +111,14 @@ def numba_tsc_3D(positions, density, boxsize, weights=np.empty(0)):
         
         # find the wrapped x,y,z grid locations of the points we need to change
         # negative indices will be automatically wrapped
-        ixm1 = (ix - 1)
+        ixm1 = rightwrap(ix - 1, gx)
         ixw  = rightwrap(ix    , gx)
         ixp1 = rightwrap(ix + 1, gx)
-        iym1 = (iy - 1)
+        iym1 = rightwrap(iy - 1, gy)
         iyw  = rightwrap(iy    , gy)
         iyp1 = rightwrap(iy + 1, gy)
         if threeD:
-            izm1 = (iz - 1)
+            izm1 = rightwrap(iz - 1, gz)
             izw  = rightwrap(iz    , gz)
             izp1 = rightwrap(iz + 1, gz)
         else:
@@ -211,14 +212,14 @@ def numba_tsc_irregular_3D(positions, density, boxsize, weights=np.empty(0)):
         
         # find the wrapped x,y,z grid locations of the points we need to change
         # negative indices will be automatically wrapped
-        ixm1 = (ix - 1)
+        ixm1 = rightwrap(ix - 1, gx)
         ixw  = rightwrap(ix    , gx)
         ixp1 = rightwrap(ix + 1, gx)
-        iym1 = (iy - 1)
+        iym1 = rightwrap(iy - 1, gy)
         iyw  = rightwrap(iy    , gy)
         iyp1 = rightwrap(iy + 1, gy)
         if threeD:
-            izm1 = (iz - 1)
+            izm1 = rightwrap(iz - 1, gz)
             izw  = rightwrap(iz    , gz)
             izp1 = rightwrap(iz + 1, gz)
         else:
@@ -364,14 +365,14 @@ def numba_cic_3D(positions, density, boxsize, weights=np.empty(0)):
         
         # find the wrapped x,y,z grid locations of the points we need to change
         # negative indices will be automatically wrapped
-        ixm1 = (ix - 1)
+        ixm1 = rightwrap(ix - 1, gx)
         ixw  = rightwrap(ix    , gx)
         ixp1 = rightwrap(ix + 1, gx)
-        iym1 = (iy - 1)
+        iym1 = rightwrap(iy - 1, gy)
         iyw  = rightwrap(iy    , gy)
         iyp1 = rightwrap(iy + 1, gy)
         if threeD:
-            izm1 = (iz - 1)
+            izm1 = rightwrap(iz - 1, gz)
             izw  = rightwrap(iz    , gz)
             izp1 = rightwrap(iz + 1, gz)
         else:
@@ -450,7 +451,7 @@ def numba_cic_1D(positions, density, boxsize, weights=np.empty(0)):
 
         # find the wrapped x,y,z grid locations of the points we need to change
         # negative indices will be automatically wrapped
-        ixm1 = (ix - 1)
+        ixm1 = rightwrap(ix - 1, gx)
         ixw  = rightwrap(ix, gx)
         ixp1 = rightwrap(ix + 1, gx)
         #if ixm1 >= zero or ixm1 < gx: density[ixm1] += wxm1 *W
@@ -474,9 +475,12 @@ def rsd_tau(tau, vfield, binc, E_z, redshift, Lbox):
     for i in range(ngrid_tr):
         for j in range(ngrid_tr):        
             tau1d[:] = tau[i, j, :]
-            pos1d[:] = binc + vfield[i, j, :]*(1+redshift)/(100.*E_z) # cMpc/h
-            #print(pos1d.max(), pos1d.min(), tau1d.mean())
-            numba_cic_1D(pos1d, tau1d_new, Lbox, weights=tau1d) # not periodic
+            #print("max min vel in km/s", vfield[i, j, :].min(), vfield[i, j, :].max())
+            extra = vfield[i, j, :]*(1+redshift)/(E_z) # cMpc/h
+            #print("adding cmpc/h = ", extra.min(), extra.max())
+            pos1d[:] = binc + extra
+            numba_cic_1D(pos1d, tau1d_new, Lbox, weights=tau1d)
+            #print(np.sum(tau1d), np.sum(tau1d_new))
             tau[i, j, :] = tau1d_new
             tau1d_new *= 0.
     return tau

@@ -35,16 +35,17 @@ snaps = snaps.astype(int)
 snap2z_dict = {}
 for i in range(len(zs)):
     snap2z_dict[snaps[i]] = zs[i]
-want_rsd = True
+want_rsd = False
 rsd_str = "_rsd" if want_rsd else ""
 fp_dm = 'fp'
-paste = 'CIC'
+paste = sys.argv[2] # 'CIC' 'TSC'
+paste_str = f"_{paste}" if paste == "TSC" else ""
 snapshot = 29 # [2.58, 2.44, 2.32], [28, 29, 30]
 redshift = snap2z_dict[snapshot]
 cell_size = Lbox/ngrid
 cosmo = FlatLambdaCDM(H0=h*100., Om0=0.3089, Tcmb0=2.725)
 H_z = cosmo.H(redshift).value
-E_z = H_z/h
+E_z = H_z/(h*100.)
 print("H(z) = ", H_z)
 
 # Ly alpha skewers directory
@@ -110,7 +111,7 @@ print("after = ", density.mean())
 
 # save tau
 print("saving density noise")
-dens_file = os.path.join(save_dir, f'noiseless_maps/density_noise_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy')
+dens_file = os.path.join(save_dir, f'noiseless_maps/density_noise{paste_str}_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy')
 np.save(dens_file, density)
 
 # generate tau
@@ -121,7 +122,7 @@ del density; gc.collect()
 
 
 # save tau
-tau_file = os.path.join(save_dir, f'noiseless_maps/tau_real_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy')
+tau_file = os.path.join(save_dir, f'noiseless_maps/tau_real{paste_str}_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy')
 np.save(tau_file, tau)
 #tau = np.load(tau_file)
 
@@ -137,7 +138,7 @@ print(tau.shape, vfield.shape, binc[0], binc[-2:], Lbox, tau.mean(), vfield.mean
 tau = rsd_tau(tau, vfield, binc, E_z, redshift, Lbox)
 
 # save tau
-tau_file = os.path.join(save_dir, f'noiseless_maps/tau_redshift_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy')
+tau_file = os.path.join(save_dir, f'noiseless_maps/tau_redshift{paste_str}_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy')
 np.save(tau_file, tau)
 
 # convert to deltaF by rescaling
@@ -149,5 +150,5 @@ k_hMpc, p1d_hMpc = compute_pk1d(deltaF, Lbox)
 print("1d power = ", p1d_hMpc)
 
 # save deltaF
-deltaF_file = os.path.join(save_dir, f'noiseless_maps/deltaF_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy')
+deltaF_file = os.path.join(save_dir, f'noiseless_maps/deltaF{paste_str}_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy')
 np.save(deltaF_file, deltaF)

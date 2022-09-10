@@ -3,7 +3,7 @@ import numpy as np
 import numba
 #from nbodykit.lab import ArrayCatalog, FieldMesh
 #from nbodykit.base.mesh import MeshFilter
-from scipy.optimize import minimize
+from scipy.optimize import minimize, newton
 from fake_spectra import fluxstatistics as fs
 import asdf
 #from fast_cksum.cksum_io import CksumWriter
@@ -490,6 +490,11 @@ def func(a, tau, target):
     print(res, a)
     return res
 
+def func_newton(a, tau, target):
+    res = np.mean(np.exp(-a*tau))-target
+    print(res, a)
+    return res
+
 def density2tau(density, tau_0, power=1.6):
     tau = tau_0 * (density)**power
     return tau
@@ -511,7 +516,7 @@ def tau2deltaF_mine(tau, redshift, mean_F=None):
     # taylor expansion for initial guess
     a0 = ( np.mean(F) - mean_F ) / np.mean(F * tau) + 1.
     opt = {'maxiter': 3, 'disp': True, 'maxfun': 3}
-    skip = 1
+    skip = 0
     if skip:
         #0.8261691877586387
         #a = 0.80826046 # 0.05
@@ -519,8 +524,8 @@ def tau2deltaF_mine(tau, redshift, mean_F=None):
         #a = 0.22076345 # FGPA
         print("skipping the minimization!!!")
     else:
-        res = minimize(func, a0, args=(tau, mean_F), tol=1.e-4, options=opt)
-        a = res['x']
+        #res = minimize(func, a0, args=(tau, mean_F), tol=1.e-4, options=opt); a = res['x']
+        a = newton(func_newton, a0, args=(tau, mean_F))#, tol=1.e-4, options=opt)
     F = np.exp(-a*tau)
     print("mean flux after = ", F.mean(), mean_F)
     deltaF = F/np.mean(F) - 1.
@@ -533,6 +538,7 @@ def tau2deltaF(tau, redshift, mean_F=None):
         assert mean_F > 0.
         #mean_F = 0.8192
     scale = fs.mean_flux(tau, mean_F)
+    print("their scale = ", scale)
     deltaF = np.exp(-scale*tau)/mean_F - 1.
     return deltaF
 

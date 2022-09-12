@@ -10,10 +10,11 @@ import sys
 
 import numpy as np
 from astropy.cosmology import FlatLambdaCDM
-from tools import rsd_tau, density2tau, tau2deltaF
+from tools import rsd_tau, density2tau, tau2deltaF, rsd_tau_Voigt
 
 from pmesh.pm import ParticleMesh
 from nbodykit.mockmaker import gaussian_real_fields
+from compute_power import compute_pk1d, compute_pk3d
 
 def get_noise(k, n=0.732, k1=0.0341):
     return 1./(1 + (k/k1)**n)
@@ -23,7 +24,6 @@ def Pk_extra(k):
 
 # sim info
 ngrid = int(sys.argv[1]) #820 #410 #205
-mean_density = 1.#5000. # checked independent of this
 Lbox = 205. # cMpc/h
 h = 0.6774
 sim_name = "TNG300"
@@ -45,14 +45,15 @@ redshift = snap2z_dict[snapshot]
 cell_size = Lbox/ngrid
 cosmo = FlatLambdaCDM(H0=h*100., Om0=0.3089, Tcmb0=2.725)
 H_z = cosmo.H(redshift).value
-E_z = H_z/(h*100.)
+#E_z = H_z/(h*100.)
+E_z = H_z/(h)
 print("H(z) = ", H_z)
 
 # Ly alpha skewers directory
 save_dir = "/n/holylfs05/LABS/hernquist_lab/Everyone/boryanah/LyA/"
 
 # load DM density maps
-data_dir = "/n/holylfs05/LABS/hernquist_lab/Everyone/boryanah/LyA/DM_Density_field/"
+data_dir = save_dir+"DM_Density_field/"
 if paste == "CIC":
     density = np.load(data_dir+f"density{rsd_str}_cic_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy")
     vfield = np.load(data_dir+f"vfield{rsd_str}_cic_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy")
@@ -62,10 +63,8 @@ else:
 # density is number of particles per cell; vfield is same thing but weighted by the 1d velocity
 vfield = vfield/density # km/s, peculiar
 density /= np.mean(density)
-density *= mean_density # TESTING!
 
 # needs higher resolution along the line of sight (could do it for each line of sight)
-#density = np.repeat
 print("before the PM stuff")
 
 # generate noise in 3D
@@ -77,6 +76,7 @@ delta_extra = np.asarray(delta_extra)
 print(delta_extra.dtype, delta_extra.shape)
 """
 
+"""
 # generate noise in 1D
 delta_extra = np.zeros((ngrid, ngrid, ngrid))
 for i in range(ngrid):
@@ -116,26 +116,29 @@ np.save(dens_file, density)
 
 # generate tau
 tau_0 = 1.
-power = 1.6
+gamma = 1.46
+power = (2.-0.7*(gamma - 1.))
+power = 1.6 # is that the culprit
 tau = density2tau(density, tau_0, power)
-del density; gc.collect()
-
+#del density; gc.collect()
+"""
 
 # save tau
 tau_file = os.path.join(save_dir, f'noiseless_maps/tau_real{paste_str}_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy')
-np.save(tau_file, tau)
-#tau = np.load(tau_file)
+#np.save(tau_file, tau)
+tau = np.load(tau_file)
 
 # we have ngrid^3 cells
 bins = np.linspace(0., ngrid, ngrid+1) # should be 0 1 2 ... 205
 binc = (bins[1:] + bins[:-1]) * .5
 binc *= cell_size # cMpc/h
-print(bins)
-print(binc)
 print(tau.shape, vfield.shape, binc[0], binc[-2:], Lbox, tau.mean(), vfield.mean())
 
 # apply RSD to tau
-tau = rsd_tau(tau, vfield, binc, E_z, redshift, Lbox)
+#tau = rsd_tau(tau, vfield, binc, E_z, redshift, Lbox)
+tau = rsd_tau_Voigt(tau, density, vfield, binc, E_z, redshift, Lbox)
+del density; gc.collect()
+print("rsded")
 
 # save tau
 tau_file = os.path.join(save_dir, f'noiseless_maps/tau_redshift{paste_str}_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy')
@@ -144,11 +147,20 @@ np.save(tau_file, tau)
 # convert to deltaF by rescaling
 deltaF = tau2deltaF(tau, redshift, mean_F=None)
 
-# compute power spectrum
-from compute_power import compute_pk1d
-k_hMpc, p1d_hMpc = compute_pk1d(deltaF, Lbox)
-print("1d power = ", p1d_hMpc)
-
 # save deltaF
 deltaF_file = os.path.join(save_dir, f'noiseless_maps/deltaF{paste_str}_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy')
+#deltaF = np.load(deltaF_file)
 np.save(deltaF_file, deltaF)
+print("saved")
+
+# compute power spectrum
+k_hMpc, p1d_hMpc = compute_pk1d(deltaF, Lbox)
+np.savez(f"power1d_fgpa{paste_str}_ngrid{ngrid:d}.npz", p1d_hMpc=p1d_hMpc, k_hMpc=k_hMpc)
+
+# params for the 3D power
+n_k_bins = 20
+n_mu_bins = 16
+
+# compute and save 3d power
+k_hMpc, mu, p3d_hMpc, counts = compute_pk3d(deltaF, Lbox, n_k_bins, n_mu_bins)
+np.savez(f"power3d_fgpa{paste_str}_ngrid{ngrid:d}.npz", p3d_hMpc=p3d_hMpc, k_hMpc=k_hMpc, mu=mu, counts=counts)

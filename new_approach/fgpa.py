@@ -1,7 +1,5 @@
-# question: when we run out of RSD bs, what do we do w stuff that's too close? (not possible) too far (can't observe?)
-# question should I match mean flux in real or redshift space
-# check redshift formula
-# figure out bias and beta (sherwood?)
+# test the 1+delta idea
+# voigt profile implement
 
 #from dataclasses import field
 import os
@@ -11,7 +9,7 @@ sys.path.append("..")
 
 import numpy as np
 from astropy.cosmology import FlatLambdaCDM
-from tools import rsd_tau, density2tau, tau2deltaF
+from tools import rsd_tau, density2tau, tau2deltaF, tau2deltaF_mine
 from compute_power import compute_pk1d, compute_pk3d
 
 # sim info
@@ -26,10 +24,11 @@ snapshot = 29 # [2.58, 2.44, 2.32], [28, 29, 30]
 if sim_name == "TNG300":
     snaps, _, zs, _ = np.loadtxt(os.path.expanduser("~/repos/hydrotools/hydrotools/data/snaps_illustris_tng205.txt"), skiprows=1, unpack=True)
     Lbox = 205.
-    N_part = 2500.**3.
+    n_total = 2500.**3.
 elif sim_name == "MNTG":
     snaps, _, zs, _ = np.loadtxt(os.path.expanduser("~/repos/hydrotools/hydrotools/data/snaps_illustris_mtng.txt"), skiprows=1, unpack=True)
     Lbox = 500.
+    n_total = 4320.**3.
 snaps = snaps.astype(int)
 
 # create a dictionary
@@ -50,11 +49,12 @@ if paste == "CIC":
 else:
     tau = np.load(data_dir+f"tau{rsd_str}_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy")
 
-# TESTING!!!!!!!!!
-tau /= (N_part/ngrid**3)
+# normalize (doesn't matter cause of rescale)
+tau /= (n_total/ngrid**3)
 
 # convert to deltaF by rescaling
 deltaF = tau2deltaF(tau, redshift, mean_F=None)
+#deltaF = tau2deltaF_mine(tau, redshift, mean_F=None) # same
 np.save(save_dir+f'noiseless_maps/deltaF{paste_str}_new_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy', deltaF)
 
 # compute power spectrum

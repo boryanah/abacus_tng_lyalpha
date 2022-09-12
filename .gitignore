@@ -1,0 +1,5 @@
+*.npz
+*png
+*~
+*/__pycache__
+*sh

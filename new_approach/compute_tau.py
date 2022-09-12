@@ -7,13 +7,15 @@ sys.path.append("../")
 import numpy as np
 import h5py
 
-
 # choices
 ngrid = int(sys.argv[1]) # 410 820 205
 paste = sys.argv[2] # "TSC" # "CIC"
 z_ints =  [2.44]# [2.58, 2.44, 2.32]
 sim_name = "TNG300"
 want_rsd = True
+#gamma = 1.46
+gamma = 1.66
+dens_exp = (2.-0.7*(gamma - 1.))
 
 if paste == "TSC":
     from tools import numba_tsc_3D
@@ -41,8 +43,8 @@ for i in range(len(zs)):
     z_dict[key] = snaps[i]
 
 # where did we save the DM field
-data_dir = "/n/holylfs05/LABS/hernquist_lab/Everyone/boryanah/LyA/DM_Density_field/"
 save_dir = "/n/holylfs05/LABS/hernquist_lab/Everyone/boryanah/LyA/"
+data_dir = save_dir+"DM_Density_field/"
 
 # sim info
 n_total = 2500**3
@@ -57,7 +59,6 @@ snaps = snaps.astype(int)
 for z_int in z_ints:
     for j, fp_dm in enumerate(['fp', 'dm']):
         if fp_dm == "dm": continue
-
 
         # currently we're at
         print("z_int, fp_dm", z_int, fp_dm)
@@ -75,11 +76,13 @@ for z_int in z_ints:
             density = np.load(data_dir+f"density_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy")
 
         # density is number of particles per cell
-        density /= np.mean(density) # 1 + delta
+        mean_density = np.mean(density)
+        print("mean density = ", mean_density, n_total/ngrid**3)
+        density /= mean_density # 1 + delta
         density_noise = np.load(save_dir + f'noiseless_maps/density_noise{paste_str}_ngrid_{ngrid:d}_snap_{snapshot:d}_{fp_dm}.npy')
         one_plus_delta_lognorm = density_noise / density
         one_plus_delta_lognorm[density == 0.] = 0.
-        density_product = density**0.6*one_plus_delta_lognorm**0.6#1.6
+        density_product = density**(dens_exp-1.)*one_plus_delta_lognorm**dens_exp
         del density, one_plus_delta_lognorm
 
         # hubble at redshift

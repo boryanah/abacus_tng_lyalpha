@@ -8,6 +8,14 @@ from fake_spectra import fluxstatistics as fs
 import asdf
 #from fast_cksum.cksum_io import CksumWriter
 
+gamma = np.float32(1.46)
+dens_exp = np.float32((2.-0.7*(gamma - 1.)))
+T0 = np.float32(1.94*10**4.)
+lambda_Lya = 1215.67
+sigma_Lya = 1
+mp = np.float32(1.67*10**(-27)) # proton mass in Kg
+kB = np.float32(1.38*10**(-23))
+
 @numba.vectorize
 def rightwrap(x, L):
     if x >= L:
@@ -461,6 +469,46 @@ def numba_cic_1D(positions, density, boxsize, weights=np.empty(0)):
         density[ixw ] += wx *W
         density[ixp1] += wxp1 *W
 
+
+@numba.jit(nopython=True, nogil=True)
+def numba_tsc_1D(positions, density, boxsize, weights=np.empty(0)):
+    gx = np.uint32(len(density))
+    W = 1.
+    Nw = len(weights)
+    for n in range(len(positions)):
+        # broadcast scalar weights
+        if Nw == 1:
+            W = weights[0]
+        elif Nw > 1:
+            W = weights[n]
+        
+        # convert to a position in the grid
+        px = (positions[n]/boxsize)*gx # used to say boxsize+0.5
+        
+        # round to nearest cell center
+        ix = np.int32(round(px))
+        
+        # calculate distance to cell center
+        dx = ix - px
+        
+        # find the tsc weights for each dimension
+        wx = .75 - dx**2
+        wxm1 = .5*(.5 + dx)**2 # og not 1.5 cause wrt to adjacent cell
+        wxp1 = .5*(.5 - dx)**2
+        
+        # find the wrapped x,y,z grid locations of the points we need to change
+        # negative indices will be automatically wrapped
+        ixm1 = rightwrap(ix - 1, gx)
+        ixw  = rightwrap(ix    , gx)
+        ixp1 = rightwrap(ix + 1, gx)
+        
+        # change the 9 or 27 cells that the cloud touches
+        density[ixm1] += wxm1 *W
+        density[ixw ] += wx   *W
+        density[ixp1] += wxp1 *W
+        
+
+
 @numba.jit(nopython=True, nogil=True) 
 def rsd_tau(tau, vfield, binc, E_z, redshift, Lbox):
     dtype = np.float32
@@ -476,10 +524,39 @@ def rsd_tau(tau, vfield, binc, E_z, redshift, Lbox):
         for j in range(ngrid_tr):        
             tau1d[:] = tau[i, j, :]
             #print("max min vel in km/s", vfield[i, j, :].min(), vfield[i, j, :].max())
+            extra = vfield[i, j, :]*(1.+redshift)/(E_z) # cMpc/h
+            #print("adding cmpc/h = ", binc.min(), binc.max(), extra.min(), extra.max())
+            pos1d[:] = binc + extra
+            numba_cic_1D(pos1d, tau1d_new, Lbox, weights=tau1d)
+            #numba_tsc_1D(pos1d, tau1d_new, Lbox, weights=tau1d)
+            #print(np.sum(tau1d), np.sum(tau1d_new))
+            tau[i, j, :] = tau1d_new
+            tau1d_new *= 0.
+    return tau
+
+@numba.jit(nopython=True, nogil=True) 
+def rsd_tau_Voigt(tau, density, vfield, binc, E_z, redshift, Lbox):
+    dtype = np.float32
+    ngrid = tau.shape[2]
+    ngrid_tr = tau.shape[0]
+    assert ngrid_tr == tau.shape[1]
+    tau1d = np.zeros(ngrid, dtype=dtype)
+    pos1d = np.zeros(ngrid, dtype=dtype)
+    tau1d_new = np.zeros(ngrid, dtype=dtype)
+    dvbin = E_z*Lbox/(ngrid*(1.+redshift))
+
+    # loop over each skewer
+    for i in range(ngrid_tr):
+        for j in range(ngrid_tr):        
+            tau1d[:] = tau[i, j, :]
+            #print("max min vel in km/s", vfield[i, j, :].min(), vfield[i, j, :].max())
             extra = vfield[i, j, :]*(1+redshift)/(E_z) # cMpc/h
             #print("adding cmpc/h = ", extra.min(), extra.max())
             pos1d[:] = binc + extra
-            numba_cic_1D(pos1d, tau1d_new, Lbox, weights=tau1d)
+            btherm = get_btherm(density[i, j, :])
+            Voigt = ((1/btherm)*np.exp(-(vfield[i, j, :]/btherm)**2)).astype(np.float32)
+            numba_cic_1D(pos1d, tau1d_new, Lbox, weights=tau1d*Voigt*dvbin)
+            #numba_tsc_1D(pos1d, tau1d_new, Lbox, weights=weight)
             #print(np.sum(tau1d), np.sum(tau1d_new))
             tau[i, j, :] = tau1d_new
             tau1d_new *= 0.
@@ -495,9 +572,19 @@ def func_newton(a, tau, target):
     print(res, a)
     return res
 
-def density2tau(density, tau_0, power=1.6):
+def density2tau(density, tau_0, power=dens_exp):
     tau = tau_0 * (density)**power
     return tau
+
+@numba.jit(nopython=True, nogil=True) 
+def get_btherm(density):
+    """ 
+    Thermal Doppler parameter in km/s
+    Delta : (1 + delta_b)
+    """
+    T = T0*density**(gamma-1)
+    btherm = np.sqrt(np.float32(2.)*kB*T/mp)/np.float32(1000.) # to km/s
+    return btherm
 
 def get_mean_flux(redshift):
     mean_F = np.exp(-1.330e-3 * (1 + redshift)**4.094)

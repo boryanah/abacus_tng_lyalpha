@@ -7,6 +7,9 @@ import h5py
 
 ngrid = int(sys.argv[1]) # 410 820 205
 paste = sys.argv[2] # "TSC" # "CIC"
+z_ints =  [2.44]# [2.58, 2.44, 2.32]
+sim_name = "TNG300-3_DM"
+want_rsd = False 
 if paste == "TSC":
     from tools import numba_tsc_3D
 elif paste == "CIC": 
@@ -16,14 +19,12 @@ elif paste == "CIC":
 #basePaths = ['/n/holylfs05/LABS/hernquist_lab/IllustrisTNG/Runs/L205n2500TNG/output/', '/n/holylfs05/LABS/hernquist_lab/IllustrisTNG/Runs/L205n2500TNG_DM/output/']
 basePaths = ['/n/holylfs05/LABS/hernquist_lab/IllustrisTNG/Runs/L205n2500TNG/output/', '/n/holylfs05/LABS/hernquist_lab/IllustrisTNG/Runs/L205n625TNG_DM/output/']
 
-want_rsd = False 
 rsd_str = "_rsd" if want_rsd else ""
 if want_rsd:
     from astropy.cosmology import FlatLambdaCDM
     h = 0.6774
     cosmo = FlatLambdaCDM(H0=h*100., Om0=0.3089, Tcmb0=2.725)
 
-z_ints =  [2.44]# [2.58, 2.44, 2.32]
 zs = [2.58, 2.44, 2.32]
 snaps = [28, 29, 30]
 z_dict = {}
@@ -31,10 +32,11 @@ for i in range(len(zs)):
     key = f"{zs[i]:.3f}"
     z_dict[key] = snaps[i]
 
+# where did we save stuff
 data_dir = "/n/holylfs05/LABS/hernquist_lab/Everyone/boryanah/LyA/DM_Density_field/"
 
-# sim info
-sim_name = "TNG300-3_DM"
+
+
 
 if "TNG300" in sim_name:
     Lbox = 205000. # ckpc/h

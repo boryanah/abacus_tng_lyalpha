@@ -15,21 +15,26 @@ from compute_power import compute_pk1d, compute_pk3d
 # sim info
 ngrid = int(sys.argv[1]) #820 #410 #205
 paste = sys.argv[2] # 'CIC' 'TSC'
-sim_name = "TNG300"
+sim_name = "TNG300-3_DM"
 fp_dm = 'fp'
 want_rsd = True
 snapshot = 29 # [2.58, 2.44, 2.32], [28, 29, 30]
 
-# load snaps and zs
-if sim_name == "TNG300":
+if "TNG300" in sim_name:
+    Lbox = 205. # cMpc/h
     snaps, _, zs, _ = np.loadtxt(os.path.expanduser("~/repos/hydrotools/hydrotools/data/snaps_illustris_tng205.txt"), skiprows=1, unpack=True)
-    Lbox = 205.
-    n_total = 2500.**3.
-elif sim_name == "MNTG":
+    if "-3" in sim_name:
+        n_total = 625**3
+    elif "-1" in sim_name:
+        n_total = 2500**3
+elif "MNTG" in sim_name:
     snaps, _, zs, _ = np.loadtxt(os.path.expanduser("~/repos/hydrotools/hydrotools/data/snaps_illustris_mtng.txt"), skiprows=1, unpack=True)
-    Lbox = 500.
-    n_total = 4320.**3.
 snaps = snaps.astype(int)
+
+if "DM" in sim_name: 
+    fp_dm = "dm"
+else:
+    fp_dm = "fp"
 
 # create a dictionary
 snap2z_dict = {}
@@ -37,6 +42,7 @@ for i in range(len(zs)):
     snap2z_dict[snaps[i]] = zs[i]
 rsd_str = "_rsd" if want_rsd else ""
 paste_str = f"_{paste}" if paste == "TSC" else ""
+if ngrid == 675: fp_dm = 'dm'
 redshift = snap2z_dict[snapshot]
 
 # Ly alpha skewers directory

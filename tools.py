@@ -10,10 +10,10 @@ import asdf
 
 gamma = np.float32(1.46)
 dens_exp = np.float32((2.-0.7*(gamma - 1.)))
-T0 = np.float32(1.94*10**4.)
+T0 = np.float32(1.94*10**4.) # K
 lambda_Lya = 1215.67
 sigma_Lya = 1
-mp = np.float32(1.67*10**(-27)) # proton mass in Kg
+mp = np.float32(1.67*10**(-27)) # kg
 kB = np.float32(1.38*10**(-23))
 
 @numba.vectorize
@@ -534,32 +534,33 @@ def rsd_tau(tau, vfield, binc, E_z, redshift, Lbox):
             tau1d_new *= 0.
     return tau
 
-@numba.jit(nopython=True, nogil=True) 
+#@numba.jit(nopython=True, nogil=True) 
 def rsd_tau_Voigt(tau, density, vfield, binc, E_z, redshift, Lbox):
     dtype = np.float32
     ngrid = tau.shape[2]
     ngrid_tr = tau.shape[0]
     assert ngrid_tr == tau.shape[1]
-    tau1d = np.zeros(ngrid, dtype=dtype)
-    pos1d = np.zeros(ngrid, dtype=dtype)
-    tau1d_new = np.zeros(ngrid, dtype=dtype)
-    dvbin = E_z*Lbox/(ngrid*(1.+redshift))
-
+    dens1d_new = np.zeros(ngrid, dtype=dtype)
+    dvbin = np.float32(E_z*Lbox/(ngrid*(1.+redshift))) # km/s around 
     # loop over each skewer
     for i in range(ngrid_tr):
         for j in range(ngrid_tr):        
-            tau1d[:] = tau[i, j, :]
-            #print("max min vel in km/s", vfield[i, j, :].min(), vfield[i, j, :].max())
-            extra = vfield[i, j, :]*(1+redshift)/(E_z) # cMpc/h
-            #print("adding cmpc/h = ", extra.min(), extra.max())
-            pos1d[:] = binc + extra
-            btherm = get_btherm(density[i, j, :])
-            Voigt = ((1/btherm)*np.exp(-(vfield[i, j, :]/btherm)**2)).astype(np.float32)
-            numba_cic_1D(pos1d, tau1d_new, Lbox, weights=tau1d*Voigt*dvbin)
-            #numba_tsc_1D(pos1d, tau1d_new, Lbox, weights=weight)
-            #print(np.sum(tau1d), np.sum(tau1d_new))
-            tau[i, j, :] = tau1d_new
-            tau1d_new *= 0.
+            
+            tau1d = tau[i, j, :] # (x)
+            vel1d = vfield[i, j, :] # (v_r)
+            dens1d = density[i, j, :] # (x)
+            extra = vel1d*(1+redshift)/(E_z) # cMpc/h (v_r)
+            pos1d = binc - extra # cMpc/h (s-v_r)
+            numba_cic_1D(pos1d, dens1d_new, Lbox)
+            btherm = get_btherm(dens1d_new) # km/s
+            K = ((1/btherm)*np.exp(-((pos1d*E_z/(1+redshift))/btherm)**2)).astype(np.float32)
+            K[btherm == 0.] = 0.
+            tau1d_f = np.fft.fft(tau1d)
+            K_f = np.fft.fft(K)
+            tau[i, j, :] = np.fft.ifft(tau1d_f*K_f).real*dvbin # mode same assumed?
+            if (i % 100 == 0) and (j % 100 == 0): print(i, j); print(tau1d_f, K_f, tau[i, j, :])
+            #tau[i, j, :] = np.convolve(tau1d, K)*dvbin # mode same assumed?
+            dens1d_new *= 0.
     return tau
 
 def func(a, tau, target):
@@ -582,8 +583,8 @@ def get_btherm(density):
     Thermal Doppler parameter in km/s
     Delta : (1 + delta_b)
     """
-    T = T0*density**(gamma-1)
-    btherm = np.sqrt(np.float32(2.)*kB*T/mp)/np.float32(1000.) # to km/s
+    T = T0*density**(gamma-np.float32(1.))
+    btherm = np.sqrt(np.float32(2.)*kB*T/mp)/np.float32(1000.) # m/s to km/s
     return btherm
 
 def get_mean_flux(redshift):
